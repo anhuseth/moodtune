@@ -1,19 +1,29 @@
 import SwiftUI
 
+enum AppTab: Hashable {
+    case mood
+    case chat
+    case listen
+}
+
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
+    @State private var tab: AppTab = .mood
 
     var body: some View {
         Group {
             if model.didFinishOnboarding {
-                TabView {
+                TabView(selection: $tab) {
                     MoodScreen(showSettings: $showSettings)
                         .tabItem { Label("Mood", systemImage: "waveform.path.ecg") }
-                    ChatScreen()
+                        .tag(AppTab.mood)
+                    ChatScreen(onHome: { tab = .mood })
                         .tabItem { Label("Chat", systemImage: "text.bubble") }
+                        .tag(AppTab.chat)
                     ListenScreen()
                         .tabItem { Label("Listen", systemImage: "play.circle") }
+                        .tag(AppTab.listen)
                 }
                 .tint(MoodPalette.accent(model.assessment.mood))
             } else {

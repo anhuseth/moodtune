@@ -48,6 +48,15 @@ enum Mood: String, CaseIterable, Codable, Equatable, Identifiable {
         }
     }
 
+    var playButtonTitle: String {
+        switch self {
+        case .stressed:
+            "Play soothing music"
+        default:
+            "Play \(title.lowercased()) music"
+        }
+    }
+
     var playlistPitch: String {
         switch self {
         case .joyful: "something upbeat"

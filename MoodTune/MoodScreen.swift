@@ -60,7 +60,7 @@ struct MoodScreen: View {
                 } label: {
                     HStack {
                         Image(systemName: "play.fill")
-                        Text("Play \(model.assessment.mood.title.lowercased()) music")
+                        Text(model.assessment.mood.playButtonTitle)
                     }
                     .font(.system(size: 19, weight: .semibold, design: .rounded))
                     .frame(maxWidth: .infinity)
@@ -118,6 +118,7 @@ struct MoodScreen: View {
 
 struct ChatScreen: View {
     @Environment(AppModel.self) private var model
+    var onHome: () -> Void
     @State private var draft = ""
     @FocusState private var isFocused: Bool
 
@@ -126,6 +127,20 @@ struct ChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            HStack {
+                Button(action: onHome) {
+                    Label("Home", systemImage: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to home")
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
