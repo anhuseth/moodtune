@@ -17,9 +17,5 @@
 	<array>
 		<string>spotify</string>
 	</array>
-	<key>NSHealthShareUsageDescription</key>
-	<string>MoodTune reads heart rate, heart-rate variability, sleep, steps, workouts, and mindfulness to estimate your mood and choose music.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>MoodTune does not write health data.</string>
 </dict>
 </plist>
