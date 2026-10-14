@@ -10,6 +10,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.moodtune.app.model.PlaybackRoute
 import com.moodtune.app.model.PlaylistSuggestion
+import com.moodtune.app.model.urlEncode
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -18,8 +19,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
 import kotlin.coroutines.resume
@@ -434,8 +433,7 @@ class SpotifyClient(context: Context) {
             return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         }
 
-        private fun encode(value: String): String =
-            URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+        private fun encode(value: String): String = urlEncode(value)
 
         private fun createSecurePrefs(context: Context): SharedPreferences = try {
             val masterKey = MasterKey.Builder(context)
@@ -448,7 +446,8 @@ class SpotifyClient(context: Context) {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
             )
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
+            // MIUI Android 11 keystore/Tink failures can surface as Error, not Exception.
             context.getSharedPreferences("moodtune_spotify_fallback", Context.MODE_PRIVATE)
         }
     }

@@ -25,21 +25,30 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 class HealthService(private val context: Context) {
-    val readPermissions: Set<String> = setOf(
-        HealthPermission.getReadPermission(StepsRecord::class),
-        HealthPermission.getReadPermission(HeartRateRecord::class),
-        HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
-        HealthPermission.getReadPermission(SleepSessionRecord::class),
-        HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-        HealthPermission.getReadPermission(MindfulnessSessionRecord::class),
-    )
+    val readPermissions: Set<String> = try {
+        setOf(
+            HealthPermission.getReadPermission(StepsRecord::class),
+            HealthPermission.getReadPermission(HeartRateRecord::class),
+            HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
+            HealthPermission.getReadPermission(SleepSessionRecord::class),
+            HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+            HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+            HealthPermission.getReadPermission(MindfulnessSessionRecord::class),
+        )
+    } catch (_: Throwable) {
+        emptySet()
+    }
 
-    fun availability(): HealthAccessStatus = when (HealthConnectClient.getSdkStatus(context)) {
-        HealthConnectClient.SDK_AVAILABLE -> HealthAccessStatus.Ready
-        HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
-            HealthAccessStatus.Failed("Update Health Connect to read health data.")
-        else -> HealthAccessStatus.Unavailable
+    fun availability(): HealthAccessStatus = try {
+        when (HealthConnectClient.getSdkStatus(context)) {
+            HealthConnectClient.SDK_AVAILABLE -> HealthAccessStatus.Ready
+            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
+                HealthAccessStatus.Failed("Update Health Connect to read health data.")
+            else -> HealthAccessStatus.Unavailable
+        }
+    } catch (_: Throwable) {
+        // MIUI can throw from PackageManager while Health Connect probes the provider.
+        HealthAccessStatus.Unavailable
     }
 
     suspend fun loadSnapshot(): HealthLoadResult {
@@ -47,11 +56,20 @@ class HealthService(private val context: Context) {
         if (status != HealthAccessStatus.Ready) {
             return HealthLoadResult(status = status, snapshot = null)
         }
-        val snapshot = fetchSnapshot()
-        return if (snapshot.hasAnySignal) {
-            HealthLoadResult(status = HealthAccessStatus.Ready, snapshot = snapshot)
-        } else {
-            HealthLoadResult(status = HealthAccessStatus.Empty, snapshot = snapshot)
+        return try {
+            val snapshot = fetchSnapshot()
+            if (snapshot.hasAnySignal) {
+                HealthLoadResult(status = HealthAccessStatus.Ready, snapshot = snapshot)
+            } else {
+                HealthLoadResult(status = HealthAccessStatus.Empty, snapshot = snapshot)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            HealthLoadResult(
+                status = HealthAccessStatus.Failed("Health data isn't available on this device."),
+                snapshot = null,
+            )
         }
     }
 
@@ -177,7 +195,9 @@ class HealthService(private val context: Context) {
 
     private suspend fun <T> read(block: suspend () -> T): T? = try {
         block()
-    } catch (_: Exception) {
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (_: Throwable) {
         null
     }
 

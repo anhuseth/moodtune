@@ -1,7 +1,6 @@
 package com.moodtune.app.model
 
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.util.Locale
 
 object PlaylistCatalog {
@@ -13,7 +12,7 @@ object PlaylistCatalog {
     }
 
     fun searchLink(mood: Mood): PlaylistSuggestion {
-        val encoded = URLEncoder.encode(mood.searchQuery, StandardCharsets.UTF_8).replace("+", "%20")
+        val encoded = urlEncode(mood.searchQuery)
         return PlaylistSuggestion(
             id = "search-${mood.name.lowercase()}",
             name = mood.searchQuery.capitalizedWords(),
@@ -46,6 +45,11 @@ object PlaylistCatalog {
         isSearchLink = false,
     )
 }
+
+// encode(String, Charset) was added in API 33. Android 11 only has encode(String, String),
+// and ViewModel startup calls this, so the Charset overload crashes the process on launch.
+internal fun urlEncode(value: String): String =
+    URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
 private fun String.capitalizedWords(): String =
     split(" ").joinToString(" ") { word ->
