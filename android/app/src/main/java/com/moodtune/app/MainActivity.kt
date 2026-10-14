@@ -1,5 +1,6 @@
 package com.moodtune.app
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -7,8 +8,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.health.connect.client.PermissionController
 import com.moodtune.app.data.AppViewModel
 import com.moodtune.app.data.SpotifyAuthRelay
@@ -21,23 +24,32 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        try {
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+                navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            )
+        } catch (_: Throwable) {
+            // MIUI Android 11 can throw from status-bar contrast and cutout window APIs.
+        }
         // Touch the model so the Spotify listener exists before a cold-start redirect.
         model.clientId
         redirectHandled = deliverRedirect(intent)
         setContent {
             val prompt = model.permissionPrompt
+            val contract = remember { healthPermissionContract() }
             val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
-                PermissionController.createRequestPermissionResultContract(),
+                contract,
             ) { granted ->
                 model.onHealthPermissionsResult(granted)
             }
             LaunchedEffect(prompt?.id) {
                 val permissions = prompt?.permissions ?: return@LaunchedEffect
-                launcher.launch(permissions)
+                try {
+                    launcher.launch(permissions)
+                } catch (_: Throwable) {
+                    model.onHealthPermissionsResult(emptySet())
+                }
             }
             MoodTuneRoot(model)
         }
@@ -66,4 +78,19 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         return true
     }
+}
+
+private fun healthPermissionContract(): ActivityResultContract<Set<String>, Set<String>> =
+    try {
+        PermissionController.createRequestPermissionResultContract()
+    } catch (_: Throwable) {
+        UnavailableHealthContract
+    }
+
+private object UnavailableHealthContract : ActivityResultContract<Set<String>, Set<String>>() {
+    override fun createIntent(context: Context, input: Set<String>): Intent {
+        throw IllegalStateException("Health Connect permissions are not available on this device.")
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Set<String> = emptySet()
 }

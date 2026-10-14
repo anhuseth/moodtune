@@ -19,6 +19,8 @@ import com.moodtune.app.model.PlaybackRoute
 import com.moodtune.app.model.PlaylistCatalog
 import com.moodtune.app.model.PlaylistSuggestion
 import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -77,11 +79,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         useSampleHealthData = if (prefs.contains(Keys.SAMPLE)) prefs.getBoolean(Keys.SAMPLE, true) else true
         didFinishOnboarding = prefs.getBoolean(Keys.ONBOARDING, false)
         messages = loadMessages()
-        isSpotifyConnected = spotify.hasStoredSession()
+        isSpotifyConnected = try {
+            spotify.hasStoredSession()
+        } catch (_: Throwable) {
+            false
+        }
         if (useSampleHealthData) {
             snapshot = HealthSnapshot.sample
         }
-        recompute(resetPlaylists = true)
+        try {
+            recompute(resetPlaylists = true)
+        } catch (_: Throwable) {
+            // Keep the waiting assessment. A startup failure must not kill the process.
+        }
     }
 
     override fun onCleared() {
@@ -215,30 +225,52 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         continuation?.resume(Unit)
     }
 
+    private val crashGuard = CoroutineExceptionHandler { _, error ->
+        statusMessage = error.message ?: "Something went wrong."
+    }
+
     private fun enqueue(block: suspend () -> Unit) {
-        viewModelScope.launch {
-            gate.withLock { block() }
+        viewModelScope.launch(crashGuard) {
+            gate.withLock {
+                try {
+                    block()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    statusMessage = error.message ?: "Something went wrong."
+                }
+            }
         }
     }
 
     private suspend fun refreshHealth(requestAuthorization: Boolean) {
-        if (requestAuthorization && health.availability() == HealthAccessStatus.Ready) {
-            requestHealthPermissions()
-        }
-        val result = health.loadSnapshot()
-        healthStatus = result.status
-        val loaded = result.snapshot
-        if (loaded != null && loaded.hasAnySignal) {
-            snapshot = loaded
-        } else if (useSampleHealthData) {
-            snapshot = HealthSnapshot.sample
-            if (healthStatus == HealthAccessStatus.Unknown) {
-                healthStatus = HealthAccessStatus.Empty
+        try {
+            if (requestAuthorization && health.availability() == HealthAccessStatus.Ready) {
+                requestHealthPermissions()
             }
-        } else {
-            snapshot = loaded
+            val result = health.loadSnapshot()
+            healthStatus = result.status
+            val loaded = result.snapshot
+            if (loaded != null && loaded.hasAnySignal) {
+                snapshot = loaded
+            } else if (useSampleHealthData) {
+                snapshot = HealthSnapshot.sample
+                if (healthStatus == HealthAccessStatus.Unknown) {
+                    healthStatus = HealthAccessStatus.Empty
+                }
+            } else {
+                snapshot = loaded
+            }
+            recompute(resetPlaylists = true)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            healthStatus = HealthAccessStatus.Failed("Health data isn't available on this device.")
+            if (useSampleHealthData) {
+                snapshot = HealthSnapshot.sample
+            }
+            recompute(resetPlaylists = true)
         }
-        recompute(resetPlaylists = true)
     }
 
     private suspend fun requestHealthPermissions() {

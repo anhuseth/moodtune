@@ -1,7 +1,5 @@
 package com.moodtune.app.model
 
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 enum class Mood {
@@ -132,7 +130,7 @@ data class PlaylistSuggestion(
 ) {
     val spotifyAppUrl: String
         get() = if (isSearchLink) {
-            val query = URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20")
+            val query = urlEncode(name)
             "spotify:search:$query"
         } else {
             uri
