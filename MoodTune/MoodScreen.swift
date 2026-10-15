@@ -354,6 +354,10 @@ struct SettingsScreen: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section("Privacy") {
+                    Link("Privacy Policy", destination: URL(string: "https://anhuseth.github.io/moodtune/")!)
+                }
+
                 if let statusMessage = model.statusMessage {
                     Section {
                         Text(statusMessage)
